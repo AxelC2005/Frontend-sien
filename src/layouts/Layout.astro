@@ -1,0 +1,69 @@
+---
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-100 text-slate-900">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title}</title>
+  <!-- Tailwind CSS Engine Garantizado -->
+  <script is:inline src="https://cdn.tailwindcss.com"></script>
+  <script is:inline>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style is:global>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .clinical-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+      transition: all 0.2s ease-in-out;
+    }
+    .clinical-card-hover:hover {
+      border-color: #93c5fd;
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px -6px rgba(37, 99, 235, 0.12);
+    }
+    /* Estilo de Tabs de Tailwind con su propio espacio y estado activo */
+    .tab-btn[aria-selected="true"] {
+      background-color: #1d4ed8 !important;
+      color: #ffffff !important;
+      border-color: #1e40af !important;
+      box-shadow: 0 4px 12px rgba(29, 78, 216, 0.28);
+    }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid #3b82f6;
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-100 text-slate-800 antialiased selection:bg-blue-600 selection:text-white">
+  <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-blue-700 text-white px-4 py-2 rounded-lg z-50 font-semibold">
+    Saltar al contenido principal
+  </a>
+  <slot />
+</body>
+</html>

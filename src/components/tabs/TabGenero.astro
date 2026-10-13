@@ -1,0 +1,31 @@
+<section id="tab-genero" role="tabpanel" class="tab-content hidden space-y-6">
+  <div class="clinical-card rounded-2xl p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div>
+      <h2 class="text-lg font-extrabold text-slate-900">Comparativa Provincial según Sexo Biológico (Celda 8)</h2>
+      <p class="text-xs text-slate-600">Interactúa con los botones para filtrar la predominancia por género.</p>
+    </div>
+    <div class="flex gap-2">
+      <button type="button" data-gen-filter="ALL" class="gen-filter-btn px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-700 text-white">Ambos Géneros</button>
+      <button type="button" data-gen-filter="F" class="gen-filter-btn px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200">Solo Mujeres (F)</button>
+      <button type="button" data-gen-filter="M" class="gen-filter-btn px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200">Solo Hombres (M)</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="clinical-card p-6 rounded-2xl border-t-4 border-t-rose-500">
+      <span class="text-xs text-rose-700 font-bold uppercase">Predominio Femenino en Sobrepeso</span>
+      <h3 class="text-3xl font-black text-slate-900 mt-1 font-mono">157 / 197 Provincias (79.7%)</h3>
+      <p class="text-xs text-slate-600 mt-2">En 157 provincias las mujeres adolescentes presentan mayor porcentaje de sobrepeso que los varones.</p>
+    </div>
+    <div class="clinical-card p-6 rounded-2xl border-t-4 border-t-sky-600">
+      <span class="text-xs text-sky-700 font-bold uppercase">Predominio Masculino en Desnutrición</span>
+      <h3 class="text-3xl font-black text-slate-900 mt-1 font-mono">180 / 197 Provincias (91.4%)</h3>
+      <p class="text-xs text-slate-600 mt-2">En 180 provincias los hombres adolescentes registran mayor prevalencia de delgadez o desnutrición.</p>
+    </div>
+  </div>
+
+  <div class="clinical-card rounded-2xl p-6">
+    <h3 class="font-bold text-base text-slate-900 mb-4">Provincias donde Predomina cada Sexo según Condición Nutricional</h3>
+    <div class="h-64"><canvas id="chartGeneroDisparidad"></canvas></div>
+  </div>
+</section>

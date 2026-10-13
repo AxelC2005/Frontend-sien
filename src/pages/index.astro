@@ -1,0 +1,487 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import TabEvaluador from '../components/tabs/TabEvaluador.astro';
+import TabResumen from '../components/tabs/TabResumen.astro';
+import TabKMeans from '../components/tabs/TabKMeans.astro';
+import TabProvincial from '../components/tabs/TabProvincial.astro';
+import TabGenero from '../components/tabs/TabGenero.astro';
+import TabPoliticas from '../components/tabs/TabPoliticas.astro';
+---
+
+<Layout title="Plataforma de Inteligencia Nutricional SIEN-HIS 2025 | Adolescentes Perú">
+  <Header />
+  <main id="main-content" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <TabEvaluador />
+    <TabResumen />
+    <TabKMeans />
+    <TabProvincial />
+    <TabGenero />
+    <TabPoliticas />
+  </main>
+  <Footer />
+</Layout>
+
+<script>
+  import Chart from 'chart.js/auto';
+  import { BASE_URL, MODEL_JSON, CLUSTER_INFO, PROVINCIAS_FALLBACK } from '../data/sienData';
+
+  let chartInd: Chart | null = null;
+  let chartProvForm: Chart | null = null;
+  let chartGenero: Chart | null = null;
+  let chartTopSob: Chart | null = null;
+  let chartTopDes: Chart | null = null;
+  let chartCompCluster: Chart | null = null;
+
+  let surveyLog: Array<any> = [];
+  let dynamicProvincesTable: Array<any> = [];
+
+  // 1. Navegación de Pestañas con Tailwind
+  document.querySelectorAll<HTMLButtonElement>('[data-tab-target]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.getAttribute('data-tab-target')!;
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('[data-tab-target]').forEach(b => b.setAttribute('aria-selected', 'false'));
+
+      document.getElementById(targetId)?.classList.remove('hidden');
+      btn.setAttribute('aria-selected', 'true');
+      window.dispatchEvent(new Event('resize'));
+    });
+  });
+
+  // 2. Control de Género en el Formulario
+  function setSex(s: string) {
+    (document.getElementById('input-genero') as HTMLInputElement).value = s;
+    const btnF = document.getElementById('btn-sex-f')!;
+    const btnM = document.getElementById('btn-sex-m')!;
+    if (s === 'F') {
+      btnF.className = "sex-btn py-2.5 px-3 rounded-xl border-2 border-blue-600 bg-blue-50 text-blue-800 font-bold text-xs flex items-center justify-center gap-2 transition";
+      btnF.setAttribute('aria-pressed', 'true');
+      btnM.className = "sex-btn py-2.5 px-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold text-xs flex items-center justify-center gap-2 hover:bg-slate-50 transition";
+      btnM.setAttribute('aria-pressed', 'false');
+    } else {
+      btnM.className = "sex-btn py-2.5 px-3 rounded-xl border-2 border-blue-600 bg-blue-50 text-blue-800 font-bold text-xs flex items-center justify-center gap-2 transition";
+      btnM.setAttribute('aria-pressed', 'true');
+      btnF.className = "sex-btn py-2.5 px-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold text-xs flex items-center justify-center gap-2 hover:bg-slate-50 transition";
+      btnF.setAttribute('aria-pressed', 'false');
+    }
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.sex-btn').forEach(btn => {
+    btn.addEventListener('click', () => setSex(btn.getAttribute('data-sex')!));
+  });
+
+  // 3. Sincronización Inputs Numéricos y Sliders + Validación
+  function syncInputs(field: string, val: string) {
+    const numInput = document.getElementById(`input-${field}`) as HTMLInputElement;
+    const sliderInput = document.getElementById(`slider-${field}`) as HTMLInputElement;
+    if (document.activeElement !== numInput) numInput.value = val;
+    if (document.activeElement !== sliderInput) sliderInput.value = val;
+
+    if (field === 'edad') {
+      const anios = (parseFloat(val) / 12).toFixed(1);
+      document.getElementById('badge-edad-anios')!.innerText = isNaN(parseFloat(anios)) ? "--" : `${anios} años`;
+    }
+    validateFormFields();
+  }
+
+  ['edad', 'peso', 'talla'].forEach(field => {
+    document.getElementById(`input-${field}`)?.addEventListener('input', (e) => syncInputs(field, (e.target as HTMLInputElement).value));
+    document.getElementById(`slider-${field}`)?.addEventListener('input', (e) => syncInputs(field, (e.target as HTMLInputElement).value));
+  });
+
+  function validateFormFields(): boolean {
+    const edad = parseFloat((document.getElementById('input-edad') as HTMLInputElement).value);
+    const peso = parseFloat((document.getElementById('input-peso') as HTMLInputElement).value);
+    const talla = parseFloat((document.getElementById('input-talla') as HTMLInputElement).value);
+
+    const vEdad = !isNaN(edad) && edad >= 144 && edad <= 215;
+    const vPeso = !isNaN(peso) && peso >= 20 && peso <= 180;
+    const vTalla = !isNaN(talla) && talla >= 100 && talla <= 210;
+
+    document.getElementById('err-edad')?.classList.toggle('hidden', vEdad);
+    document.getElementById('err-peso')?.classList.toggle('hidden', vPeso);
+    document.getElementById('err-talla')?.classList.toggle('hidden', vTalla);
+
+    return vEdad && vPeso && vTalla;
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const [edad, peso, talla, gen] = btn.getAttribute('data-preset')!.split(',');
+      setSex(gen);
+      syncInputs('edad', edad);
+      syncInputs('peso', peso);
+      syncInputs('talla', talla);
+      (document.getElementById('predictForm') as HTMLFormElement).requestSubmit();
+    });
+  });
+
+  // 4. Inferencia Local de Respaldo (con Edad, Peso, Talla e IMC)
+  function calcularLocalFallback(edad: number, peso: number, talla: number, provKey: string) {
+    const imc = peso / Math.pow(talla / 100, 2);
+    const entrada = [edad, peso, talla, imc];
+    const scaled = entrada.map((val, i) => (val - MODEL_JSON.mean[i]) / MODEL_JSON.scale[i]);
+
+    const distancias = MODEL_JSON.centers.map(c => {
+      const sumSq = c.reduce((acc, val, i) => acc + Math.pow(val - scaled[i], 2), 0);
+      return Math.sqrt(sumSq);
+    });
+
+    let clusterId = 0;
+    distancias.forEach((d, idx) => { if (d < distancias[clusterId]) clusterId = idx; });
+
+    return {
+      IMC_Calculado: parseFloat(imc.toFixed(2)),
+      Cluster_Asignado: clusterId,
+      Distancias: distancias,
+      Perfil_Cluster: CLUSTER_INFO[clusterId],
+      Estadisticas_Provincia: PROVINCIAS_FALLBACK[provKey] || PROVINCIAS_FALLBACK["PROMEDIO NACIONAL"]
+    };
+  }
+
+  // 5. Sincronizar Provincias y Rankings Dinámicos desde tu API (PUBLIC_API_URL)
+  async function syncWithCloudflareAPI() {
+    const badge = document.getElementById('api-status-badge')!;
+    const dot = document.getElementById('api-status-dot')!;
+    const text = document.getElementById('api-status-text')!;
+
+    try {
+      // 5.1 Cargar lista de provincias para el Select
+      const resProv = await fetch(`${BASE_URL}/api/provincias`);
+      if (!resProv.ok) throw new Error("API sin provincias");
+      const listaProvincias: string[] = await resProv.json();
+
+      const select = document.getElementById('input-provincia') as HTMLSelectElement;
+      select.innerHTML = '<option value="PROMEDIO NACIONAL">PROMEDIO NACIONAL (Referencia)</option>';
+      listaProvincias.forEach(p => { select.innerHTML += `<option value="${p}">${p}</option>`; });
+      document.getElementById('header-prov-count')!.innerText = String(listaProvincias.length);
+
+      // 5.2 Cargar Dashboard Dinámico si el endpoint /api/dashboard está desplegado
+      try {
+        const resDash = await fetch(`${BASE_URL}/api/dashboard`);
+        if (resDash.ok) {
+          const dashData = await resDash.json();
+          updateChartsFromAPI(dashData);
+        }
+      } catch {
+        // Si aún no actualizaste /api/dashboard en el Worker, mantiene los rankings iniciales
+      }
+
+      badge.className = "flex items-center gap-2 bg-emerald-50 text-emerald-800 px-3.5 py-2 rounded-xl border border-emerald-200 font-bold";
+      dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-600";
+      text.innerText = "API Cloudflare Activa";
+    } catch {
+      badge.className = "flex items-center gap-2 bg-indigo-50 text-indigo-800 px-3.5 py-2 rounded-xl border border-indigo-200 font-bold";
+      dot.className = "w-2.5 h-2.5 rounded-full bg-indigo-600";
+      text.innerText = "Modo Local (Verifica PUBLIC_API_URL)";
+    }
+  }
+
+  // Actualiza gráficos y tablas con los porcentajes reales traídos de la API
+  function updateChartsFromAPI(dashData: any) {
+    if (dashData.top_sobrepeso && chartTopSob) {
+      chartTopSob.data.labels = dashData.top_sobrepeso.map((x: any) => x.key);
+      chartTopSob.data.datasets[0].data = dashData.top_sobrepeso.map((x: any) => x.Sobrepeso);
+      chartTopSob.update();
+    }
+    if (dashData.top_desnutricion && chartTopDes) {
+      chartTopDes.data.labels = dashData.top_desnutricion.map((x: any) => x.key);
+      chartTopDes.data.datasets[0].data = dashData.top_desnutricion.map((x: any) => x.Desnutricion);
+      chartTopDes.update();
+    }
+    if (dashData.provincias_tabla) {
+      dynamicProvincesTable = dashData.provincias_tabla;
+      renderProvincialTable(dynamicProvincesTable);
+    }
+  }
+
+  // 6. Envío del Formulario a POST /api/predict
+  document.getElementById('predictForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!validateFormFields()) return;
+
+    const btn = document.getElementById('btnSubmit') as HTMLButtonElement;
+    const sourceTag = document.getElementById('res-source-tag')!;
+    btn.disabled = true;
+
+    const payload = {
+      Provincia: (document.getElementById('input-provincia') as HTMLSelectElement).value,
+      Genero: (document.getElementById('input-genero') as HTMLInputElement).value,
+      EdadMeses: parseFloat((document.getElementById('input-edad') as HTMLInputElement).value),
+      Peso: parseFloat((document.getElementById('input-peso') as HTMLInputElement).value),
+      Talla: parseFloat((document.getElementById('input-talla') as HTMLInputElement).value)
+    };
+
+    let resultadoFinal: any = null;
+    let origen = `API (${BASE_URL})`;
+
+    try {
+      const response = await fetch(`${BASE_URL}/api/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error("Fallback");
+      const data = await response.json();
+      const fb = calcularLocalFallback(payload.EdadMeses, payload.Peso, payload.Talla, payload.Provincia);
+
+      const cId = data.Resultados.Cluster_Asignado;
+      resultadoFinal = {
+        IMC_Calculado: data.Resultados.IMC_Calculado,
+        Cluster_Asignado: cId,
+        Distancias: data.Resultados.Distancias || fb.Distancias,
+        Perfil_Cluster: {
+          ...CLUSTER_INFO[cId],
+          ...(data.Resultados.Perfil_Cluster || {})
+        },
+        Estadisticas_Provincia: data.Resultados.Estadisticas_Provincia || fb.Estadisticas_Provincia
+      };
+    } catch {
+      origen = "Motor Local (model.json)";
+      resultadoFinal = calcularLocalFallback(payload.EdadMeses, payload.Peso, payload.Talla, payload.Provincia);
+    }
+
+    sourceTag.innerText = `Fuente: ${origen}`;
+    renderEvaluationResult(payload, resultadoFinal);
+    appendSurveyRecord(payload, resultadoFinal);
+    btn.disabled = false;
+  });
+
+  function renderEvaluationResult(payload: any, res: any) {
+    document.getElementById('res-imc-val')!.innerText = res.IMC_Calculado.toFixed(2);
+    document.getElementById('res-genero-tag')!.innerText = `Paciente: ${payload.Genero === 'F' ? 'Femenino (F)' : 'Masculino (M)'}`;
+
+    const badgeEl = document.getElementById('res-imc-badge')!;
+    if (res.IMC_Calculado < 18.5) {
+      badgeEl.innerText = "Tendencia a Delgadez (< 18.5)";
+      badgeEl.className = "mt-2 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-900 border border-rose-300";
+    } else if (res.IMC_Calculado < 25.0) {
+      badgeEl.innerText = "Rango Adecuado (< 25.0 kg/m²)";
+      badgeEl.className = "mt-2 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-300";
+    } else {
+      badgeEl.innerText = "Exceso Ponderal (≥ 25.0 kg/m²)";
+      badgeEl.className = "mt-2 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300";
+    }
+
+    const cInfo = CLUSTER_INFO[res.Cluster_Asignado];
+    const tallaCluster = res.Perfil_Cluster?.Talla || cInfo.Talla;
+    const pesoCluster = res.Perfil_Cluster?.Peso || cInfo.Peso;
+    const imcCluster = res.Perfil_Cluster?.IMC || cInfo.IMC;
+
+    document.getElementById('res-cluster-title')!.innerHTML = `<span class="w-3 h-3 rounded-full ${cInfo.ColorDot}"></span> Cluster ${res.Cluster_Asignado}: ${cInfo.Nombre}`;
+    document.getElementById('res-cluster-desc')!.innerText = cInfo.Desc;
+    document.getElementById('res-clinical-text')!.innerText = cInfo.Rec;
+
+    const maxD = Math.max(...res.Distancias, 4.0);
+    [0, 1, 2].forEach(i => {
+      document.getElementById(`dist-c${i}-val`)!.innerText = `d = ${res.Distancias[i].toFixed(2)}`;
+      (document.getElementById(`dist-c${i}-bar`) as HTMLElement).style.width = `${Math.min((res.Distancias[i] / maxD) * 100, 100)}%`;
+    });
+
+    // Gráfico 1: Incluye IMC, Peso y TALLA del Paciente vs su Cluster
+    if (chartInd) chartInd.destroy();
+    chartInd = new Chart(document.getElementById('chartIndividual') as HTMLCanvasElement, {
+      type: 'bar',
+      data: {
+        labels: ['IMC (kg/m²)', 'Peso (kg)', 'Talla (cm)'],
+        datasets: [
+          { label: 'Encuestado Actual', data: [res.IMC_Calculado, payload.Peso, payload.Talla], backgroundColor: '#1d4ed8', borderRadius: 6 },
+          { label: `Promedio Cluster ${res.Cluster_Asignado}`, data: [imcCluster, pesoCluster, tallaCluster], backgroundColor: '#94a3b8', borderRadius: 6 }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    // Gráfico 2: Porcentajes dinámicos de la Provincia devueltos por la API
+    const provStats = res.Estadisticas_Provincia || { Normal: 65.45, Sobrepeso: 33.41, Desnutricion: 1.13 };
+    document.getElementById('title-chart-prov')!.innerText = `Provincia (${payload.Provincia}): Sob ${provStats.Sobrepeso}% | Norm ${provStats.Normal}%`;
+    if (chartProvForm) chartProvForm.destroy();
+    chartProvForm = new Chart(document.getElementById('chartProvinciaForm') as HTMLCanvasElement, {
+      type: 'doughnut',
+      data: {
+        labels: [
+          `Normal (${provStats.Normal}%)`,
+          `Sobrepeso (${provStats.Sobrepeso}%)`,
+          `Desnutrición (${provStats.Desnutricion}%)`
+        ],
+        datasets: [{
+          data: [provStats.Normal, provStats.Sobrepeso, provStats.Desnutricion],
+          backgroundColor: ['#059669', '#d97706', '#e11d48']
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '62%' }
+    });
+  }
+
+  // 7. Bitácora CSV
+  function appendSurveyRecord(payload: any, res: any) {
+    const hora = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    surveyLog.unshift({
+      id: surveyLog.length + 1,
+      hora,
+      provincia: payload.Provincia,
+      genero: payload.Genero,
+      edad: payload.EdadMeses,
+      peso: payload.Peso,
+      talla: payload.Talla,
+      imc: res.IMC_Calculado,
+      cluster: `Cluster ${res.Cluster_Asignado} (${CLUSTER_INFO[res.Cluster_Asignado].Nombre})`
+    });
+    renderSurveyLog();
+  }
+
+  function renderSurveyLog() {
+    const tbody = document.getElementById('survey-log-body')!;
+    tbody.innerHTML = surveyLog.map(item => `
+      <tr class="hover:bg-slate-50">
+        <td class="p-3 font-bold">${item.id}</td>
+        <td class="p-3 text-slate-500">${item.hora}</td>
+        <td class="p-3 font-sans font-semibold">${item.provincia}</td>
+        <td class="p-3">${item.genero}</td>
+        <td class="p-3 text-right">${item.edad}</td>
+        <td class="p-3 text-right">${item.peso.toFixed(1)}</td>
+        <td class="p-3 text-right">${item.talla.toFixed(1)}</td>
+        <td class="p-3 text-right font-bold text-blue-700">${item.imc.toFixed(2)}</td>
+        <td class="p-3 text-center"><span class="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-[11px] font-sans font-bold">${item.cluster}</span></td>
+      </tr>
+    `).join('');
+  }
+
+  document.getElementById('btn-clear-log')?.addEventListener('click', () => { surveyLog = []; renderSurveyLog(); });
+  document.getElementById('btn-export-csv')?.addEventListener('click', () => {
+    if (!surveyLog.length) return alert("Aún no hay registros en la bitácora.");
+    const headers = "ID,Hora,Provincia,Genero,EdadMeses,Peso,Talla,IMC,Cluster\n";
+    const rows = surveyLog.map(r => `${r.id},${r.hora},"${r.provincia}",${r.genero},${r.edad},${r.peso},${r.talla},${r.imc},"${r.cluster}"`).join("\n");
+    const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = "encuesta_sien_evaluados.csv";
+    a.click();
+  });
+
+  // 8. Inicializar Gráficos Globales
+  function initGlobalCharts() {
+    new Chart(document.getElementById('chartGlobalNutricional') as HTMLCanvasElement, {
+      type: 'doughnut',
+      data: {
+        labels: ['Normal (65.45%)', 'Sobrepeso (33.41%)', 'Desnutrición (1.13%)'],
+        datasets: [{ data: [818788, 418019, 14173], backgroundColor: ['#059669', '#d97706', '#e11d48'] }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, cutout: '68%' }
+    });
+
+    new Chart(document.getElementById('chartElbow') as HTMLCanvasElement, {
+      type: 'line',
+      data: {
+        labels: ['k=1', 'k=2', 'k=3 (Óptimo)', 'k=4', 'k=5', 'k=6', 'k=7', 'k=8', 'k=9'],
+        datasets: [{
+          label: 'Inercia WCSS',
+          data: [200000, 129000, 98000, 84000, 71500, 63500, 58000, 53000, 49500],
+          borderColor: '#1d4ed8',
+          backgroundColor: 'rgba(29, 78, 216, 0.1)',
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+
+    chartCompCluster = new Chart(document.getElementById('chartClusterComposition') as HTMLCanvasElement, {
+      type: 'bar',
+      data: {
+        labels: ['Cluster 0 (Jóvenes)', 'Cluster 1 (Sobrepeso)', 'Cluster 2 (Mayores)'],
+        datasets: [
+          { label: '% Normal', data: [74.56, 1.96, 81.05], backgroundColor: '#059669' },
+          { label: '% Sobrepeso', data: [23.50, 98.04, 18.07], backgroundColor: '#d97706' },
+          { label: '% Desnutrición', data: [1.94, 0.00, 0.89], backgroundColor: '#e11d48' }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, max: 100 } } }
+    });
+
+    chartTopSob = new Chart(document.getElementById('chartTopSobrepeso') as HTMLCanvasElement, {
+      type: 'bar',
+      data: {
+        labels: ["TACNA - JORGE BASADRE", "MOQUEGUA - ILO", "AREQUIPA - ISLAY", "TACNA - TACNA", "MOQUEGUA - MARISCAL NIETO", "ICA - NAZCA", "LA LIBERTAD - ASCOPE", "ICA - PALPA", "AREQUIPA - CAMANÁ", "LIMA - HUAURA"],
+        datasets: [{ label: '% Sobrepeso', data: [55.76, 52.99, 52.49, 51.63, 49.51, 48.70, 48.60, 48.09, 47.51, 47.26], backgroundColor: '#d97706' }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { min: 40, max: 60 } } }
+    });
+
+    chartTopDes = new Chart(document.getElementById('chartTopDesnutricion') as HTMLCanvasElement, {
+      type: 'bar',
+      data: {
+        labels: ["TUMBES - TUMBES", "SAN MARTÍN - SAN MARTÍN", "PIURA - TALARA", "PIURA - SULLANA", "PIURA - MORROPÓN", "TUMBES - ZARUMILLA", "PIURA - AYABACA", "LORETO - MAYNAS", "JUNÍN - CHUPACA", "CAJAMARCA - SAN MARCOS"],
+        datasets: [{ label: '% Desnutrición', data: [2.24, 2.12, 2.04, 1.94, 1.86, 1.85, 1.72, 1.69, 1.66, 1.63], backgroundColor: '#e11d48' }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { min: 1.0, max: 2.5 } } }
+    });
+
+    updateGenderChart('ALL');
+  }
+
+  function updateGenderChart(mode: string) {
+    document.querySelectorAll<HTMLButtonElement>('.gen-filter-btn').forEach(btn => {
+      const active = btn.getAttribute('data-gen-filter') === mode;
+      btn.className = active
+        ? "gen-filter-btn px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-700 text-white"
+        : "gen-filter-btn px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200";
+    });
+
+    if (chartGenero) chartGenero.destroy();
+    const datasets = [];
+    if (mode === 'ALL' || mode === 'F') datasets.push({ label: 'Mayor % en Mujeres (F)', data: [157, 17], backgroundColor: '#e11d48', borderRadius: 6 });
+    if (mode === 'ALL' || mode === 'M') datasets.push({ label: 'Mayor % en Hombres (M)', data: [40, 180], backgroundColor: '#0284c7', borderRadius: 6 });
+
+    chartGenero = new Chart(document.getElementById('chartGeneroDisparidad') as HTMLCanvasElement, {
+      type: 'bar',
+      data: { labels: ['Predominio de Sobrepeso', 'Predominio de Desnutrición'], datasets },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.gen-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => updateGenderChart(btn.getAttribute('data-gen-filter')!));
+  });
+
+  function renderProvincialTable(data: Array<any>) {
+    const tbody = document.getElementById('provincial-table-body')!;
+    tbody.innerHTML = data.map(item => {
+      const norm = item.Normal ?? item.norm ?? 0;
+      const sob = item.Sobrepeso ?? item.sob ?? 0;
+      const des = item.Desnutricion ?? item.des ?? 0;
+      return `
+        <tr class="hover:bg-slate-50">
+          <td class="p-3 font-bold font-sans">${item.prov}</td>
+          <td class="p-3 font-sans">${item.reg}</td>
+          <td class="p-3 text-right">${item.count ? item.count.toLocaleString() : 'API'}</td>
+          <td class="p-3 text-right text-emerald-700 font-bold">${norm.toFixed(2)}%</td>
+          <td class="p-3 text-right text-amber-700 font-bold">${sob.toFixed(2)}%</td>
+          <td class="p-3 text-right text-rose-700 font-bold">${des.toFixed(2)}%</td>
+          <td class="p-3 text-center font-sans">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${sob >= 47 ? 'bg-amber-100 text-amber-900 border-amber-300' : (des >= 1.8 ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-emerald-100 text-emerald-900 border-emerald-300')}">
+              ${sob >= 47 ? 'Alerta Sobrepeso' : (des >= 1.8 ? 'Alerta Delgadez' : 'Estándar')}
+            </span>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function filterTable() {
+    const q = (document.getElementById('table-search') as HTMLInputElement).value.toLowerCase();
+    const reg = (document.getElementById('table-filter-region') as HTMLSelectElement).value;
+    renderProvincialTable(dynamicProvincesTable.filter(i => (i.prov.toLowerCase().includes(q) || i.reg.toLowerCase().includes(q)) && (!reg || i.reg === reg)));
+  }
+
+  document.getElementById('table-search')?.addEventListener('keyup', filterTable);
+  document.getElementById('table-filter-region')?.addEventListener('change', filterTable);
+
+  // Arrancar sistema
+  initGlobalCharts();
+  syncWithCloudflareAPI().then(() => {
+    (document.getElementById('predictForm') as HTMLFormElement).requestSubmit();
+  });
+</script>

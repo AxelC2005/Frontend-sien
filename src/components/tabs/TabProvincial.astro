@@ -1,0 +1,49 @@
+<section id="tab-provincial" role="tabpanel" class="tab-content hidden space-y-6">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="clinical-card rounded-2xl p-6">
+      <h3 class="font-bold text-base text-slate-900 mb-4">Top 10 Provincias con Mayor Sobrepeso (%)</h3>
+      <div class="h-72"><canvas id="chartTopSobrepeso"></canvas></div>
+    </div>
+    <div class="clinical-card rounded-2xl p-6">
+      <h3 class="font-bold text-base text-slate-900 mb-4">Top 10 Provincias con Mayor Desnutrición (%)</h3>
+      <div class="h-72"><canvas id="chartTopDesnutricion"></canvas></div>
+    </div>
+  </div>
+
+  <div class="clinical-card rounded-2xl p-6 space-y-4">
+    <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+      <h3 class="font-bold text-base text-slate-900">Explorador del Ranking Provincial (197 Provincias)</h3>
+      <div class="flex flex-wrap items-center gap-3">
+        <input type="text" id="table-search" placeholder="Buscar provincia o región..." aria-label="Buscar provincia" class="bg-white border border-slate-300 rounded-xl px-3.5 py-1.5 text-xs text-slate-900" />
+        <select id="table-filter-region" aria-label="Filtrar por región" class="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-900">
+          <option value="">Todas las Regiones</option>
+          <option value="TACNA">Tacna</option>
+          <option value="MOQUEGUA">Moquegua</option>
+          <option value="AREQUIPA">Arequipa</option>
+          <option value="ICA">Ica</option>
+          <option value="LIMA">Lima</option>
+          <option value="PIURA">Piura</option>
+          <option value="TUMBES">Tumbes</option>
+          <option value="SAN MARTÍN">San Martín</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <table class="w-full text-left text-xs text-slate-700">
+        <thead class="bg-slate-100 text-slate-800 font-bold uppercase text-[11px] border-b border-slate-200">
+          <tr>
+            <th class="p-3">Provincia</th>
+            <th class="p-3">Región</th>
+            <th class="p-3 text-right">Evaluados</th>
+            <th class="p-3 text-right">% Normal</th>
+            <th class="p-3 text-right">% Sobrepeso</th>
+            <th class="p-3 text-right">% Desnutrición</th>
+            <th class="p-3 text-center">Condición</th>
+          </tr>
+        </thead>
+        <tbody id="provincial-table-body" class="divide-y divide-slate-200 font-mono"></tbody>
+      </table>
+    </div>
+  </div>
+</section>

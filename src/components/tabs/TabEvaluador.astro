@@ -1,0 +1,252 @@
+<section id="tab-calculadora" role="tabpanel" class="tab-content space-y-6">
+  <div class="clinical-card rounded-2xl p-6 border-l-4 border-l-blue-600 bg-gradient-to-r from-blue-50/60 to-white">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+      <div>
+        <h2 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-stethoscope text-blue-600" aria-hidden="true"></i> Formulario de Captura Antropométrica & Inferencia en Cloudflare
+        </h2>
+        <p class="text-xs sm:text-sm text-slate-600 mt-1">
+          Ingresa los datos de nuevos adolescentes encuestados. El formulario valida los rangos biológicos y consulta el modelo <code class="font-mono text-blue-700 font-semibold">K-Means</code> en el servidor remoto.
+        </p>
+      </div>
+      <span class="px-3 py-1.5 bg-indigo-50 text-indigo-800 border border-indigo-200 rounded-lg text-xs font-bold font-mono">
+        POST /api/predict
+      </span>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- Formulario Izquierdo (5 cols) -->
+    <div class="clinical-card rounded-2xl p-6 lg:col-span-5 flex flex-col justify-between">
+      <form id="predictForm" class="space-y-4" novalidate>
+        <div class="border-b border-slate-200 pb-3 flex justify-between items-center">
+          <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-user-plus text-blue-600" aria-hidden="true"></i> Nuevo Registro de Encuesta
+          </h3>
+          <span class="text-[11px] font-semibold text-slate-500">* Obligatorio</span>
+        </div>
+
+        <div>
+          <label for="input-provincia" class="block text-xs font-bold text-slate-700 mb-1">Provincia de Origen / Residencia *</label>
+          <select id="input-provincia" required class="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 font-medium focus:border-blue-600 transition">
+            <option value="PROMEDIO NACIONAL">Promedio Nacional (Referencia General)</option>
+            <option value="TACNA - JORGE BASADRE">TACNA - JORGE BASADRE (Top 1 Sobrepeso)</option>
+            <option value="MOQUEGUA - ILO">MOQUEGUA - ILO (Top 2 Sobrepeso)</option>
+            <option value="AREQUIPA - ISLAY">AREQUIPA - ISLAY (Top 3 Sobrepeso)</option>
+            <option value="TUMBES - TUMBES">TUMBES - TUMBES (Top 1 Desnutrición)</option>
+            <option value="SAN MARTIN - SAN MARTIN">SAN MARTÍN - SAN MARTÍN (Top 2 Desnutrición)</option>
+            <option value="PIURA - TALARA">PIURA - TALARA (Top 3 Desnutrición)</option>
+            <option value="LIMA - LIMA">LIMA - LIMA</option>
+          </select>
+        </div>
+
+        <div>
+          <label id="label-genero" class="block text-xs font-bold text-slate-700 mb-1.5">Género / Sexo Biológico *</label>
+          <input type="hidden" id="input-genero" value="F" required />
+          <div class="grid grid-cols-2 gap-3" role="radiogroup" aria-labelledby="label-genero">
+            <button type="button" id="btn-sex-f" data-sex="F" aria-pressed="true" class="sex-btn py-2.5 px-3 rounded-xl border-2 border-blue-600 bg-blue-50 text-blue-800 font-bold text-xs flex items-center justify-center gap-2 transition">
+              <i class="fa-solid fa-venus text-rose-600 text-sm" aria-hidden="true"></i> Femenino (F)
+            </button>
+            <button type="button" id="btn-sex-m" data-sex="M" aria-pressed="false" class="sex-btn py-2.5 px-3 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold text-xs flex items-center justify-center gap-2 hover:bg-slate-50 transition">
+              <i class="fa-solid fa-mars text-sky-600 text-sm" aria-hidden="true"></i> Masculino (M)
+            </button>
+          </div>
+        </div>
+
+        <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+          <div class="flex justify-between items-center">
+            <label for="input-edad" class="text-xs font-bold text-slate-800">Edad en Meses * <span class="font-normal text-slate-500">(144 - 215 m)</span></label>
+            <span id="badge-edad-anios" class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-mono text-xs font-bold">15.0 años</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="number" id="input-edad" min="144" max="215" step="1" value="180" required class="w-28 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-mono font-bold text-slate-900" />
+            <input type="range" id="slider-edad" min="144" max="215" step="1" value="180" aria-label="Deslizador de edad" class="flex-1 accent-blue-600 cursor-pointer h-2 bg-slate-200 rounded-lg" />
+          </div>
+          <p id="err-edad" class="text-[11px] text-rose-600 font-semibold hidden">Rango válido: entre 144 y 215 meses (12 a 17.9 años).</p>
+        </div>
+
+        <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+          <div class="flex justify-between items-center">
+            <label for="input-peso" class="text-xs font-bold text-slate-800">Peso Corporal (kg) *</label>
+            <span class="text-[11px] font-mono text-slate-500">Rango: 20 - 180 kg</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="number" id="input-peso" min="20" max="180" step="0.1" value="65.5" required class="w-28 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-mono font-bold text-slate-900" />
+            <input type="range" id="slider-peso" min="20" max="130" step="0.5" value="65.5" aria-label="Deslizador de peso" class="flex-1 accent-blue-600 cursor-pointer h-2 bg-slate-200 rounded-lg" />
+          </div>
+          <p id="err-peso" class="text-[11px] text-rose-600 font-semibold hidden">Ingrese un peso válido (20 a 180 kg).</p>
+        </div>
+
+        <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+          <div class="flex justify-between items-center">
+            <label for="input-talla" class="text-xs font-bold text-slate-800">Talla / Estatura (cm) *</label>
+            <span class="text-[11px] font-mono text-slate-500">Rango: 100 - 210 cm</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="number" id="input-talla" min="100" max="210" step="0.1" value="158.0" required class="w-28 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-mono font-bold text-slate-900" />
+            <input type="range" id="slider-talla" min="120" max="195" step="0.5" value="158.0" aria-label="Deslizador de talla" class="flex-1 accent-blue-600 cursor-pointer h-2 bg-slate-200 rounded-lg" />
+          </div>
+          <p id="err-talla" class="text-[11px] text-rose-600 font-semibold hidden">Ingrese una talla válida (100 a 210 cm).</p>
+        </div>
+
+        <button type="submit" id="btnSubmit" class="w-full py-3 px-4 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm">
+          <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+          <span>Procesar en API & Añadir Encuestado</span>
+        </button>
+      </form>
+
+      <div class="mt-5 pt-4 border-t border-slate-200 space-y-3">
+        <div>
+          <p class="text-xs font-bold text-slate-700 mb-2">Casos Clínicos de Prueba Rápida:</p>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" data-preset="161,44.0,148.0,M" class="preset-btn py-1.5 px-2 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg text-xs font-bold text-sky-900 transition">Cluster 0 (Joven)</button>
+            <button type="button" data-preset="180,65.5,158.0,F" class="preset-btn py-1.5 px-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg text-xs font-bold text-amber-900 transition">Cluster 1 (Riesgo)</button>
+            <button type="button" data-preset="192,54.3,158.5,F" class="preset-btn py-1.5 px-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold text-emerald-900 transition">Cluster 2 (Mayor)</button>
+          </div>
+        </div>
+
+        <div class="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-950 space-y-1">
+          <p class="font-bold flex items-center gap-1.5 text-amber-900">
+            <i class="fa-solid fa-circle-info" aria-hidden="true"></i> Nota Metodológica sobre Edades K-Means:
+          </p>
+          <p class="leading-relaxed text-[11px]">
+            <strong>Estándar Jóvenes (Cluster 0):</strong> Media de <strong>161.16 meses (~13.4 años)</strong> en pubertad inicial.<br />
+            <strong>Estándar Mayores (Cluster 2):</strong> Media de <strong>192.53 meses (~16.0 años)</strong> en desarrollo avanzado.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel Derecho: Resultados (7 cols) -->
+    <div class="clinical-card rounded-2xl p-6 lg:col-span-7 space-y-5 flex flex-col justify-between" aria-live="polite">
+      <div>
+        <div class="flex flex-wrap justify-between items-center border-b border-slate-200 pb-3 gap-2">
+          <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-square-poll-vertical text-blue-600" aria-hidden="true"></i> Diagnóstico Multidimensional del Modelo
+          </h3>
+          <span id="res-source-tag" class="px-2.5 py-0.5 rounded-md text-[11px] font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-300">
+            Esperando consulta...
+          </span>
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-center items-center text-center">
+            <p class="text-xs uppercase font-bold text-slate-600">IMC Calculado por API</p>
+            <p class="text-4xl font-black text-slate-900 mt-1 font-mono" id="res-imc-val">26.24</p>
+            <p class="text-xs text-slate-500 mt-0.5">kg/m² (Corte ref: 25.0 kg/m²)</p>
+            <span id="res-imc-badge" class="mt-2 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+              Exceso Ponderal
+            </span>
+          </div>
+
+          <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col justify-center">
+            <div class="flex justify-between items-center">
+              <p class="text-xs uppercase font-bold text-slate-600">Cluster Asignado</p>
+              <span id="res-genero-tag" class="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">Paciente: Femenino</span>
+            </div>
+            <h4 class="text-lg font-extrabold text-slate-900 mt-1 flex items-center gap-2" id="res-cluster-title">
+              <span class="w-3 h-3 rounded-full bg-amber-500"></span> Cluster 1: Riesgo Sobrepeso
+            </h4>
+            <p class="text-xs text-slate-600 mt-1.5 leading-relaxed" id="res-cluster-desc">
+              Ubicado en el clúster de alta densidad ponderal.
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-4 space-y-2.5 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div class="flex justify-between items-center">
+            <p class="text-xs font-bold text-slate-800">Distancia Euclidiana Estandarizada hacia los Centroides:</p>
+            <span class="text-[11px] text-slate-500 font-mono">Menor distancia = Cluster asignado</span>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-sky-800 font-bold">Cluster 0: Estándar Jóvenes (~13.4 años | IMC 19.98)</span>
+              <span class="font-mono font-bold text-slate-700" id="dist-c0-val">d = 2.84</span>
+            </div>
+            <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+              <div id="dist-c0-bar" class="bg-sky-600 h-2.5 rounded-full transition-all duration-300" style="width: 55%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-amber-900 font-bold">Cluster 1: Riesgo Sobrepeso (~15.3 años | IMC 28.42)</span>
+              <span class="font-mono font-bold text-slate-700" id="dist-c1-val">d = 0.89</span>
+            </div>
+            <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+              <div id="dist-c1-bar" class="bg-amber-500 h-2.5 rounded-full transition-all duration-300" style="width: 18%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-emerald-900 font-bold">Cluster 2: Estándar Mayores (~16.0 años | IMC 21.66)</span>
+              <span class="font-mono font-bold text-slate-700" id="dist-c2-val">d = 1.76</span>
+            </div>
+            <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+              <div id="dist-c2-bar" class="bg-emerald-600 h-2.5 rounded-full transition-all duration-300" style="width: 35%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="p-3.5 bg-white rounded-xl border border-slate-200">
+            <p class="text-xs font-bold text-slate-800 mb-2 text-center">Paciente vs. Promedio de su Cluster</p>
+            <div class="h-48"><canvas id="chartIndividual"></canvas></div>
+          </div>
+          <div class="p-3.5 bg-white rounded-xl border border-slate-200">
+            <p class="text-xs font-bold text-slate-800 mb-2 text-center" id="title-chart-prov">Contexto Provincial</p>
+            <div class="h-48"><canvas id="chartProvinciaForm"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-xs flex items-start gap-3">
+        <i class="fa-solid fa-user-doctor text-blue-700 text-lg mt-0.5" aria-hidden="true"></i>
+        <div>
+          <p class="font-bold text-blue-900">Interpretación No Supervisada & Orientación</p>
+          <p class="text-slate-700 mt-0.5 leading-relaxed" id="res-clinical-text">
+            El clúster representa un patrón matemático antropométrico y no reemplaza el diagnóstico médico.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bitácora de Encuesta en Vivo -->
+  <div class="clinical-card rounded-2xl p-6 space-y-4">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-3">
+      <div>
+        <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-clipboard-list text-blue-600" aria-hidden="true"></i> Bitácora de Nuevos Encuestados Registrados
+        </h3>
+        <p class="text-xs text-slate-600">Almacena en tiempo real las consultas enviadas al endpoint de predicción durante la sesión.</p>
+      </div>
+      <div class="flex gap-2">
+        <button type="button" id="btn-export-csv" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5">
+          <i class="fa-solid fa-file-csv" aria-hidden="true"></i> Exportar Encuesta (.CSV)
+        </button>
+        <button type="button" id="btn-clear-log" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-xs font-semibold transition">
+          Limpiar
+        </button>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <table class="w-full text-left text-xs text-slate-700">
+        <thead class="bg-slate-100 text-slate-800 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200">
+          <tr>
+            <th class="p-3">#</th>
+            <th class="p-3">Hora</th>
+            <th class="p-3">Provincia</th>
+            <th class="p-3">Género</th>
+            <th class="p-3 text-right">Edad (m)</th>
+            <th class="p-3 text-right">Peso (kg)</th>
+            <th class="p-3 text-right">Talla (cm)</th>
+            <th class="p-3 text-right">IMC</th>
+            <th class="p-3 text-center">Cluster Asignado</th>
+          </tr>
+        </thead>
+        <tbody id="survey-log-body" class="divide-y divide-slate-200 font-mono"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
